@@ -9,7 +9,8 @@
 
 #define CHECK_INPUT(x) CHECK_CUDA(x); CHECK_CONTIGUOUS(x)
 
-#define CHECK_FLOAT(x) AT_ASSERTM(x.type().scalarType() == torch::ScalarType::Float, #x " must be float Tensor")
+#define CHECK_FLOAT(x) AT_ASSERTM(x.type().scalarType() == torch::ScalarType::Float || \
+    x.type().scalarType() == torch::ScalarType::Double, #x " must be float or double Tensor")
 #define CHECK_INT(x) AT_ASSERTM(x.type().scalarType() == torch::ScalarType::Int, #x " must be int Tensor")
 //using namespace at;
 
@@ -30,35 +31,9 @@ void crop_and_resize_3d_gpu_forward(
     CHECK_INPUT(box_index); CHECK_INT(box_index);
     CHECK_INPUT(crops);     CHECK_FLOAT(crops);
 
-    const int batch_size    = image.size(0);
-    const int depth         = image.size(1);
-    const int image_width   = image.size(2);
-    const int image_length  = image.size(3);
-    const int image_height  = image.size(4);
-
-    const int num_boxes     = boxes.size(0);
-
-    // init output space
-//    THCTensor_resize(state, crops, {num_boxes, depth, crop_height, crop_width});
-
-    crops.resize_({num_boxes, depth, crop_width, crop_length, crop_height});
-    crops.zero_();
-//    THCudaTensor_resize4d(state, crops, num_boxes, depth, crop_height, crop_width);
-//    THCudaTensor_zero(state, crops);
-
-
-
-//    auto state = globalContext().getTHCState();
-    cudaStream_t stream = at::cuda::getCurrentCUDAStream();// THCState_getCurrentStream(state);
-
-    CropAndResizeLaucher3D(
-        image.data<float>(),
-        boxes.data<float>(),
-        box_index.data<int>(),
-        num_boxes, batch_size, image_width, image_length, image_height,
-        crop_width, crop_length, crop_height, depth, extrapolation_value,
-        crops.data<float>(),
-        stream
+    crop_and_resize_3d_cuda_forward(
+        image, boxes, box_index, extrapolation_value,
+        crop_width, crop_length, crop_height, crops
     );
 }
 
@@ -74,33 +49,12 @@ void crop_and_resize_3d_gpu_backward(
     CHECK_INPUT(box_index); CHECK_INT(box_index);
     CHECK_INPUT(grads_image); CHECK_FLOAT(grads_image); CHECK_DIMS(grads_image);
 
-    // shape
-    const int batch_size    = grads_image.size(0);
-    const int depth         = grads_image.size(1);
-    const int image_width   = grads_image.size(2);
-    const int image_length  = grads_image.size(3);
-    const int image_height  = grads_image.size(4);
-
-    const int num_boxes     = grads.size(0);
-    const int crop_width    = grads.size(2);
-    const int crop_length   = grads.size(3);
-    const int crop_height   = grads.size(4);
-
-    // init output space
-    grads_image.zero_();
-
-    cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-    CropAndResizeBackpropImageLaucher3D(
-        grads.data<float>(),
-        boxes.data<float>(),
-        box_index.data<int>(),
-        num_boxes, batch_size, image_width, image_length, image_height,
-        crop_width, crop_length, crop_height, depth,
-        grads_image.data<float>(),
-        stream
+    crop_and_resize_3d_cuda_backward(
+        grads, boxes, box_index, grads_image
     );
 }
 }
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def(
       "forward",
