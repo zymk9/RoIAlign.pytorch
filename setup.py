@@ -7,7 +7,12 @@ modules = [
         'roi_align.crop_and_resize_cpu',
         ['roi_align/src/crop_and_resize.cpp'],
         extra_compile_args={'cxx': ['-g', '-fopenmp']}
-        )
+        ),
+    CppExtension(
+        'roi_align.crop_and_resize_3d_cpu',
+        ['roi_align/src/crop_and_resize_3d.cpp'],
+        extra_compile_args={'cxx': ['-g', '-fopenmp']}
+    )
 ]
 
 if torch.cuda.is_available():
@@ -16,6 +21,16 @@ if torch.cuda.is_available():
             'roi_align.crop_and_resize_gpu',
             ['roi_align/src/crop_and_resize_gpu.cpp',
              'roi_align/src/cuda/crop_and_resize_kernel.cu'],
+            extra_compile_args={'cxx': ['-g', '-fopenmp'],
+                                'nvcc': ['-O2']}
+        )
+    )
+
+    modules.append(
+        CUDAExtension(
+            'roi_align.crop_and_resize_3d_gpu',
+            ['roi_align/src/crop_and_resize_3d_gpu.cpp',
+             'roi_align/src/cuda/crop_and_resize_kernel_3d.cu'],
             extra_compile_args={'cxx': ['-g', '-fopenmp'],
                                 'nvcc': ['-O2']}
         )
