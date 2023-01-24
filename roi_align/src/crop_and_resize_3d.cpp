@@ -22,6 +22,7 @@ void CropAndResizePerBox3D(
     const int crop_width,
     const int crop_length,
     const int crop_height,
+    const scalar_t spatial_scale,
     const scalar_t extrapolation_value
 ) {
     const int image_channel_elements = image_height * image_width * image_length;
@@ -34,12 +35,12 @@ void CropAndResizePerBox3D(
     #pragma omp parallel for
     for (b = start_box; b < limit_box; ++b) {
         const scalar_t * box = boxes_data + b * 6;
-        const scalar_t x1 = box[0];
-        const scalar_t y1 = box[1];
-        const scalar_t z1 = box[2];
-        const scalar_t x2 = box[3];
-        const scalar_t y2 = box[4];
-        const scalar_t z2 = box[5];
+        const scalar_t x1 = box[0] * spatial_scale;
+        const scalar_t y1 = box[1] * spatial_scale;
+        const scalar_t z1 = box[2] * spatial_scale;
+        const scalar_t x2 = box[3] * spatial_scale;
+        const scalar_t y2 = box[4] * spatial_scale;
+        const scalar_t z2 = box[5] * spatial_scale;
 
         const int b_in = box_index_data[b];
         if (b_in < 0 || b_in >= batch_size) {
@@ -148,7 +149,8 @@ void crop_and_resize_3d_forward(
     torch::Tensor image,
     torch::Tensor boxes,      // [x1, y1, z1, x2, y2, z2]
     torch::Tensor box_index,    // range in [0, batch_size)
-    const float extrapolation_value,
+    const double spatial_scale,
+    const double extrapolation_value,
     const int crop_width,
     const int crop_length,
     const int crop_height,
@@ -189,6 +191,7 @@ void crop_and_resize_3d_forward(
             crop_width,
             crop_length,
             crop_height,
+            spatial_scale,
             extrapolation_value
         );
     });
@@ -212,7 +215,8 @@ void CropAndResizePerBox3DBackward(
     const int num_boxes,
     const int crop_width,
     const int crop_length,
-    const int crop_height
+    const int crop_height,
+    const scalar_t spatial_scale
 ) {
     // n_elements
     const int image_channel_elements = image_height * image_width * image_length;
@@ -223,12 +227,12 @@ void CropAndResizePerBox3DBackward(
 
     for (int b = 0; b < num_boxes; ++b) {
         const scalar_t * box = boxes_data + b * 6;
-        const scalar_t x1 = box[0];
-        const scalar_t y1 = box[1];
-        const scalar_t z1 = box[2];
-        const scalar_t x2 = box[3];
-        const scalar_t y2 = box[4];
-        const scalar_t z2 = box[5];
+        const scalar_t x1 = box[0] * spatial_scale;
+        const scalar_t y1 = box[1] * spatial_scale;
+        const scalar_t z1 = box[2] * spatial_scale;
+        const scalar_t x2 = box[3] * spatial_scale;
+        const scalar_t y2 = box[4] * spatial_scale;
+        const scalar_t z2 = box[5] * spatial_scale;
 
         const int b_in = box_index_data[b];
         if (b_in < 0 || b_in >= batch_size) {
@@ -302,6 +306,7 @@ void crop_and_resize_3d_backward(
     torch::Tensor grads,
     torch::Tensor boxes,      // [x1, y1, z1, x2, y2, z2]
     torch::Tensor box_index,    // range in [0, batch_size)
+    const double spatial_scale,
     torch::Tensor grads_image // resize to [bsize, c, wc, lc, hc]
 ) {
     CHECK_INPUT(grads);     CHECK_FLOAT(grads);
@@ -339,7 +344,8 @@ void crop_and_resize_3d_backward(
             num_boxes,
             crop_width,
             crop_length,
-            crop_height
+            crop_height,
+            spatial_scale
         );
     }));
 }

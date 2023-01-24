@@ -20,7 +20,8 @@ void crop_and_resize_3d_gpu_forward(
     torch::Tensor image,
     torch::Tensor boxes,           // [x1, y1, z1, x2, y2, z2]
     torch::Tensor box_index,    // range in [0, batch_size)
-    const float extrapolation_value,
+    const double spatial_scale,
+    const double extrapolation_value,
     const int crop_width,
     const int crop_length,
     const int crop_height,
@@ -32,7 +33,7 @@ void crop_and_resize_3d_gpu_forward(
     CHECK_INPUT(crops);     CHECK_FLOAT(crops);
 
     crop_and_resize_3d_cuda_forward(
-        image, boxes, box_index, extrapolation_value,
+        image, boxes, box_index, spatial_scale, extrapolation_value,
         crop_width, crop_length, crop_height, crops
     );
 }
@@ -42,6 +43,7 @@ void crop_and_resize_3d_gpu_backward(
     torch::Tensor grads,
     torch::Tensor boxes,      // [x1, y1, z1, x2, y2, z2]
     torch::Tensor box_index,    // range in [0, batch_size)
+    const double spatial_scale,
     torch::Tensor grads_image // resize to [bsize, c, wc, lc, hc]
 ) {
     CHECK_INPUT(grads);     CHECK_FLOAT(grads);
@@ -50,7 +52,7 @@ void crop_and_resize_3d_gpu_backward(
     CHECK_INPUT(grads_image); CHECK_FLOAT(grads_image); CHECK_DIMS(grads_image);
 
     crop_and_resize_3d_cuda_backward(
-        grads, boxes, box_index, grads_image
+        grads, boxes, box_index, spatial_scale, grads_image
     );
 }
 }

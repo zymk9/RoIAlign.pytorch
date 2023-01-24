@@ -13,9 +13,7 @@ def to_varabile(arr, requires_grad=False, is_cuda=True):
     return var
 
 
-def fn(x):
-    is_cuda = False
-
+def fn(x, spatial_scale=1.0, is_cuda=False):
     boxes_data = np.asarray([[2, 3, 1, 6, 7, 8]], dtype=np.double)
     box_index_data = np.asarray([0], dtype=np.int32)
 
@@ -23,7 +21,7 @@ def fn(x):
     box_index = to_varabile(box_index_data, requires_grad=False, is_cuda=is_cuda)
 
     y = roi_align_3d(
-        x, boxes, box_index, 4, 3, 5,
+        x, boxes, box_index, 4, 3, 5, spatial_scale=spatial_scale
     )
 
     return y
@@ -50,7 +48,16 @@ print(roi_align_3d(
     image_torch, boxes, box_index, 3, 4, 5,
 ))
 
+print('output with spatial_scale=0.5:')
+print(roi_align_3d(
+    image_torch, boxes, box_index, 3, 4, 5, spatial_scale=0.5,
+))
+
+print('gradcheck:')
 input = torch.randn(2, 3, 8, 9, 10, dtype=torch.double, requires_grad=True)
 input = input.cuda() if is_cuda else input
-test = gradcheck(fn, input)
+test = gradcheck(fn, (input, 1.0))
+print(test)
+
+test = gradcheck(fn, (input, 0.5))
 print(test)

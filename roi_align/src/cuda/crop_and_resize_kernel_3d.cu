@@ -8,29 +8,13 @@ for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < n; \
 
 
 template <typename scalar_t>
-void CropAndResizeBackpropImageLaucher3D(
-    const scalar_t *grads_ptr, const scalar_t *boxes_ptr,
-    const int *box_ind_ptr, int num_boxes, int batch, int image_width,
-    int image_length, int image_height, int crop_width, int crop_length,
-    int crop_height, int depth, scalar_t *grads_image_ptr, cudaStream_t stream);
-
-
-template <typename scalar_t>
-void CropAndResizeLaucher3D(
-    const scalar_t *image_ptr, const scalar_t *boxes_ptr,
-    const int *box_ind_ptr, int num_boxes, int batch, int image_width,
-    int image_length, int image_height, int crop_width, int crop_length, 
-    int crop_height, int depth, scalar_t extrapolation_value, 
-    scalar_t *crops_ptr, cudaStream_t stream);
-
-
-template <typename scalar_t>
 __global__
 void CropAndResizeKernel3D(
     const int nthreads, const scalar_t *image_ptr, const scalar_t *boxes_ptr,
     const int *box_ind_ptr, int num_boxes, int batch, int image_width,
     int image_length, int image_height, int crop_width, int crop_length,
-    int crop_height, int depth, scalar_t extrapolation_value, scalar_t *crops_ptr)
+    int crop_height, int depth, scalar_t spatial_scale, scalar_t extrapolation_value, 
+    scalar_t *crops_ptr)
 {
     CUDA_1D_KERNEL_LOOP(out_idx, nthreads)
     {
@@ -45,12 +29,12 @@ void CropAndResizeKernel3D(
         const int d = idx % depth;
         const int b = idx / depth;
 
-        const scalar_t x1 = boxes_ptr[b * 6];
-        const scalar_t y1 = boxes_ptr[b * 6 + 1];
-        const scalar_t z1 = boxes_ptr[b * 6 + 2];
-        const scalar_t x2 = boxes_ptr[b * 6 + 3];
-        const scalar_t y2 = boxes_ptr[b * 6 + 4];
-        const scalar_t z2 = boxes_ptr[b * 6 + 5];
+        const scalar_t x1 = boxes_ptr[b * 6] * spatial_scale;
+        const scalar_t y1 = boxes_ptr[b * 6 + 1] * spatial_scale;
+        const scalar_t z1 = boxes_ptr[b * 6 + 2] * spatial_scale;
+        const scalar_t x2 = boxes_ptr[b * 6 + 3] * spatial_scale;
+        const scalar_t y2 = boxes_ptr[b * 6 + 4] * spatial_scale;
+        const scalar_t z2 = boxes_ptr[b * 6 + 5] * spatial_scale;
 
         const int b_in = box_ind_ptr[b];
         if (b_in < 0 || b_in >= batch)
@@ -125,7 +109,7 @@ void CropAndResizeBackpropImageKernel3D(
     const int nthreads, const scalar_t *grads_ptr, const scalar_t *boxes_ptr,
     const int *box_ind_ptr, int num_boxes, int batch, int image_width,
     int image_length, int image_height, int crop_width, int crop_length,
-    int crop_height, int depth, scalar_t *grads_image_ptr)
+    int crop_height, int depth, scalar_t spatial_scale, scalar_t *grads_image_ptr)
 {
     CUDA_1D_KERNEL_LOOP(out_idx, nthreads)
     {
@@ -140,12 +124,12 @@ void CropAndResizeBackpropImageKernel3D(
         const int d = idx % depth;
         const int b = idx / depth;
 
-        const scalar_t x1 = boxes_ptr[b * 6];
-        const scalar_t y1 = boxes_ptr[b * 6 + 1];
-        const scalar_t z1 = boxes_ptr[b * 6 + 2];
-        const scalar_t x2 = boxes_ptr[b * 6 + 3];
-        const scalar_t y2 = boxes_ptr[b * 6 + 4];
-        const scalar_t z2 = boxes_ptr[b * 6 + 5];
+        const scalar_t x1 = boxes_ptr[b * 6] * spatial_scale;
+        const scalar_t y1 = boxes_ptr[b * 6 + 1] * spatial_scale;
+        const scalar_t z1 = boxes_ptr[b * 6 + 2] * spatial_scale;
+        const scalar_t x2 = boxes_ptr[b * 6 + 3] * spatial_scale;
+        const scalar_t y2 = boxes_ptr[b * 6 + 4] * spatial_scale;
+        const scalar_t z2 = boxes_ptr[b * 6 + 5] * spatial_scale;
 
         const int b_in = box_ind_ptr[b];
         if (b_in < 0 || b_in >= batch)
@@ -238,7 +222,7 @@ void CropAndResizeLaucher3D(
     const scalar_t *image_ptr, const scalar_t *boxes_ptr,
     const int *box_ind_ptr, int num_boxes, int batch, int image_width,
     int image_length, int image_height, int crop_width, int crop_length,
-    int crop_height, int depth, scalar_t extrapolation_value, 
+    int crop_height, int depth, scalar_t spatial_scale, scalar_t extrapolation_value, 
     scalar_t *crops_ptr, cudaStream_t stream)
 {   
     const int total_count = num_boxes * crop_height * crop_width * crop_length * depth;
@@ -251,7 +235,8 @@ void CropAndResizeLaucher3D(
         CropAndResizeKernel3D<scalar_t><<<block_count, thread_per_block, 0, stream>>>(
             total_count, image_ptr, boxes_ptr,
             box_ind_ptr, num_boxes, batch, image_width, image_length, image_height,
-            crop_width, crop_length, crop_height, depth, extrapolation_value, crops_ptr);
+            crop_width, crop_length, crop_height, depth, spatial_scale,
+            extrapolation_value, crops_ptr);
 
         err = cudaGetLastError();
         if (cudaSuccess != err)
@@ -268,7 +253,8 @@ void CropAndResizeBackpropImageLaucher3D(
     const scalar_t *grads_ptr, const scalar_t *boxes_ptr,
     const int *box_ind_ptr, int num_boxes, int batch, int image_width,
     int image_length, int image_height, int crop_width, int crop_length, 
-    int crop_height, int depth, scalar_t *grads_image_ptr, cudaStream_t stream)
+    int crop_height, int depth, scalar_t spatial_scale, 
+    scalar_t *grads_image_ptr, cudaStream_t stream)
 {   
     const int total_count = num_boxes * crop_height * crop_width * crop_length * depth;
     const int thread_per_block = 1024;
@@ -280,7 +266,7 @@ void CropAndResizeBackpropImageLaucher3D(
         CropAndResizeBackpropImageKernel3D<scalar_t><<<block_count, thread_per_block, 0, stream>>>(
             total_count, grads_ptr, boxes_ptr,
             box_ind_ptr, num_boxes, batch, image_width, image_length, image_height,
-            crop_width, crop_length, crop_height, depth, grads_image_ptr);
+            crop_width, crop_length, crop_height, depth, spatial_scale, grads_image_ptr);
 
         err = cudaGetLastError();
         if (cudaSuccess != err)
@@ -296,7 +282,8 @@ void crop_and_resize_3d_cuda_forward(
     torch::Tensor image,
     torch::Tensor boxes,            // [x1, y1, z1, x2, y2, z2]
     torch::Tensor box_index,        // range in [0, batch_size) // int
-    const float extrapolation_value,
+    const double spatial_scale,
+    const double extrapolation_value,
     const int crop_width,
     const int crop_length,
     const int crop_height,
@@ -321,7 +308,8 @@ void crop_and_resize_3d_cuda_forward(
             boxes.data<scalar_t>(),
             box_index.data<int>(),
             num_boxes, batch_size, image_width, image_length, image_height,
-            crop_width, crop_length, crop_height, depth, extrapolation_value,
+            crop_width, crop_length, crop_height, depth,
+            spatial_scale, extrapolation_value,
             crops.data<scalar_t>(),
             stream
         );
@@ -333,6 +321,7 @@ void crop_and_resize_3d_cuda_backward(
     torch::Tensor grads,
     torch::Tensor boxes,      // [x1, y1, z1, x2, y2, z2]
     torch::Tensor box_index,    // range in [0, batch_size) // int
+    const double spatial_scale,
     torch::Tensor grads_image // resize to [bsize, c, wc, lc, hc]
 ) {
     // shape
@@ -358,7 +347,7 @@ void crop_and_resize_3d_cuda_backward(
             boxes.data<scalar_t>(),
             box_index.data<int>(),
             num_boxes, batch_size, image_width, image_length, image_height,
-            crop_width, crop_length, crop_height, depth,
+            crop_width, crop_length, crop_height, depth, spatial_scale,
             grads_image.data<scalar_t>(),
             stream
         );
